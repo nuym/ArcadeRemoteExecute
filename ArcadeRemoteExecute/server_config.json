@@ -1,0 +1,7 @@
+{
+  "UpdatesFolder": "./Updates",
+  "Port": 5000,
+  "ListenHost": "",
+  "ConfigFolder": "./Config",
+  "ConfigFileName": "AquaMai.toml"
+}

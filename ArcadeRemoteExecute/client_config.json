@@ -1,0 +1,10 @@
+{
+  "TargetProcess": "sinmai.exe",
+  "LaunchCommand": "C:\\Games\\Arcade\\start.bat",
+  "ServerUrl": "http://你的云端IP:5000",
+  "UpdateTargetDir": "",
+  "ProcessCheckIntervalSeconds": 5,
+  "UpdateCheckIntervalSeconds": 60,
+  "LocalConfigPath": "C:\\Games\\AquaMai\\AquaMai.toml",
+  "OverrideFreePlay": null
+}
