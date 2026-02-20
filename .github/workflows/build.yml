@@ -1,0 +1,56 @@
+name: Build
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build -c Release --no-restore
+
+      - name: Publish Linux x64
+        run: >
+          dotnet publish ArcadeRemoteExecute/ArcadeRemoteExecute.csproj
+          -c Release
+          -r linux-x64
+          --self-contained
+          -p:PublishSingleFile=false
+          -o publish/linux-x64
+
+      - name: Publish Windows x64
+        run: >
+          dotnet publish ArcadeRemoteExecute/ArcadeRemoteExecute.csproj
+          -c Release
+          -r win-x64
+          --self-contained
+          -p:PublishSingleFile=false
+          -o publish/win-x64
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcade-remote-execute-linux-x64
+          path: publish/linux-x64
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arcade-remote-execute-win-x64
+          path: publish/win-x64
