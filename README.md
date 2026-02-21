@@ -53,15 +53,21 @@ dotnet publish -c Release -r linux-x64 --self-contained
 
 ### 云端（Ubuntu / Linux）
 
-1. 将编译或发布后的程序放到服务器，并准备好**配置文件**（见下方「配置文件」）。
+1. 将编译或发布后的程序放到服务器，并准备好**配置文件**（见下方「配置文件」）。确保 `server_config.json` 与可执行文件在同一目录。
 2. 在服务器上创建好 `Updates`（放 zip）和 `Config`（放配置与 freeplay 状态）目录（或按 `server_config.json` 中路径配置）。
-3. 启动服务端：
+3. 启动服务端（任选一种方式）：
+
+**方式 A：在已发布目录中运行**
+
+发布后或从 GitHub Actions 下载并解压的产物在一个目录里（如 `publish/linux-x64/` 或解压得到的文件夹）。先进入该目录再执行：
 
 ```bash
+cd publish/linux-x64   # 或你解压后的目录
+chmod +x ArcadeRemoteExecute   # 若提示权限不足则执行
 ./ArcadeRemoteExecute --server
 ```
 
-或使用 dotnet 直接运行：
+**方式 B：在源码目录用 dotnet 运行**
 
 ```bash
 dotnet run --project ArcadeRemoteExecute -- --server
@@ -157,6 +163,7 @@ freeplay 状态会保存在 `ConfigFolder/freeplay.json`，由程序自动读写
 
 - 配置了 `LocalConfigPath` 时，街机端会按间隔从云端拉取配置并写入该路径；若云端提供 `/freeplay` 接口，会优先使用云端的 freeplay 值并可在变更时自动重启游戏。
 - 云端 Updates 为空时，街机不会删除任何本地已有文件，仅跳过 zip 更新。
+- **云端 Config 文件夹为空**（没有配置文件名如 AquaMai.toml）时，`GET /config` 返回 404，街机端只会报「下载配置失败」，**不会覆盖**本地配置文件，也**不会**根据 freeplay 改写或重启游戏；本地原有配置与 freeplay 状态保持不变。
 
 ---
 

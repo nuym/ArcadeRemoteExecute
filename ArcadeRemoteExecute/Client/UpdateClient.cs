@@ -115,7 +115,7 @@ public class UpdateClient
     }
 
     /// <summary>
-    /// 从云端下载配置文件到本地，优先使用云端 /freeplay 远程开关，否则用本地 OverrideFreePlay；若 freeplay 变更则写配置并重启游戏。
+    /// 从云端获取 freeplay 并写回本地配置；若 freeplay 变更则写文件、关闭游戏并由守护重启。配置内容优先用云端 /config，失败则用本地已有文件。
     /// </summary>
     private async Task DownloadAndApplyConfigAsync(string baseUrl, CancellationToken cancel)
     {
@@ -123,30 +123,65 @@ public class UpdateClient
         if (string.IsNullOrEmpty(localPath))
             return;
 
+        bool? freePlayToApply;
         try
         {
-            bool? freePlayToApply = await FetchRemoteFreePlayAsync(baseUrl, cancel).ConfigureAwait(false);
-            if (!freePlayToApply.HasValue)
-                freePlayToApply = _config.OverrideFreePlay;
-
-            var configUrl = $"{baseUrl}/config";
-            var content = await _http.GetStringAsync(configUrl, cancel).ConfigureAwait(false);
-            var dir = Path.GetDirectoryName(localPath);
-            if (!string.IsNullOrEmpty(dir))
-                Directory.CreateDirectory(dir);
-
-            if (freePlayToApply.HasValue)
-                content = ApplyFreePlayOverride(content, freePlayToApply.Value);
-
-            await File.WriteAllTextAsync(localPath, content, cancel).ConfigureAwait(false);
-            Console.WriteLine($"[更新] 已下载配置到: {localPath}");
-
-            if (freePlayToApply.HasValue)
-                TryApplyFreePlayAndRestartGame(freePlayToApply.Value, localPath);
+            freePlayToApply = await FetchRemoteFreePlayAsync(baseUrl, cancel).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[更新] 下载配置失败: {ex.Message}");
+            Console.WriteLine($"[更新] 获取 FreePlay 状态失败: {ex.Message}");
+            return;
+        }
+
+        if (!freePlayToApply.HasValue)
+            freePlayToApply = _config.OverrideFreePlay;
+        if (!freePlayToApply.HasValue)
+            return;
+
+        string? content = null;
+        try
+        {
+            var configUrl = $"{baseUrl}/config";
+            content = await _http.GetStringAsync(configUrl, cancel).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[更新] 下载云端配置失败: {ex.Message}，将使用本地配置文件更新 FreePlay");
+        }
+
+        if (string.IsNullOrEmpty(content) && File.Exists(localPath))
+        {
+            try
+            {
+                content = await File.ReadAllTextAsync(localPath, cancel).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[更新] 读取本地配置失败: {ex.Message}");
+                return;
+            }
+        }
+
+        if (string.IsNullOrEmpty(content))
+        {
+            Console.WriteLine("[更新] 无配置内容可写（云端无配置且本地无文件），跳过 FreePlay 更新");
+            return;
+        }
+
+        try
+        {
+            content = ApplyFreePlayOverride(content, freePlayToApply.Value);
+            var dir = Path.GetDirectoryName(localPath);
+            if (!string.IsNullOrEmpty(dir))
+                Directory.CreateDirectory(dir);
+            await File.WriteAllTextAsync(localPath, content, cancel).ConfigureAwait(false);
+            Console.WriteLine($"[更新] 已写入配置到: {localPath}，IsFreePlay = {freePlayToApply.Value}");
+            TryApplyFreePlayAndRestartGame(freePlayToApply.Value, localPath);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[更新] 写入配置失败: {ex.Message}");
         }
     }
 
@@ -168,16 +203,12 @@ public class UpdateClient
         var lastAppliedPath = Path.Combine(Path.GetDirectoryName(localConfigPath) ?? "", ".last_freeplay");
         var lastApplied = ReadLastAppliedFreePlay(lastAppliedPath);
         if (lastApplied.HasValue && lastApplied.Value == appliedFreePlay)
-        {
             return;
-        }
+
         try
         {
-            if (lastApplied.HasValue)
-            {
-                KillTargetProcess();
-                Console.WriteLine($"[更新] FreePlay 已改为 {appliedFreePlay}，已关闭游戏，将由守护进程重新启动");
-            }
+            KillTargetProcess();
+            Console.WriteLine($"[更新] FreePlay 已改为 {appliedFreePlay}，已关闭游戏，将由守护进程重新启动");
             File.WriteAllText(lastAppliedPath, appliedFreePlay ? "True" : "False");
         }
         catch (Exception ex)
