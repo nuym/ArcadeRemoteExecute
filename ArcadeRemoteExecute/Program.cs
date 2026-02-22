@@ -3,6 +3,13 @@ using ArcadeRemoteExecute.Config;
 using ArcadeRemoteExecute.Server;
 
 var isServer = args.Contains("--server", StringComparer.OrdinalIgnoreCase);
+var testConfigIdx = Array.FindIndex(args, a => a.Equals("--test-config", StringComparison.OrdinalIgnoreCase));
+if (testConfigIdx >= 0)
+{
+    var path = testConfigIdx + 1 < args.Length ? args[testConfigIdx + 1] : "AquaMai.toml";
+    UpdateClient.TestApplyFreePlayToFile(path, false);
+    return;
+}
 
 if (isServer)
 {

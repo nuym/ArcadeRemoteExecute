@@ -248,13 +248,40 @@ public class UpdateClient
     }
 
     /// <summary>
-    /// 将 TOML 内容中的 IsFreePlay 改为指定值（支持被注释的行，覆盖时会取消注释）
+    /// 将 TOML 中的 IsFreePlay 改为指定值。格式须为 AquaMai 标准：在 [GameSettings.CreditConfig] 下单独一行 "IsFreePlay = true/false"，
+    /// 而非 "[GameSettings.CreditConfig] isfreeplay" 等形式。支持该行被 #/## 注释；若无该行则在该区块下插入。
     /// </summary>
     private static string ApplyFreePlayOverride(string tomlContent, bool isFreePlay)
     {
         var valueStr = isFreePlay ? "true" : "false";
-        // 匹配可选 # 与空白 + IsFreePlay = true/false，统一改为未注释的 IsFreePlay = value
-        var pattern = @"#?\s*IsFreePlay\s*=\s*(?:true|false)";
-        return Regex.Replace(tomlContent, pattern, $"IsFreePlay = {valueStr}", RegexOptions.IgnoreCase);
+        var newLine = "IsFreePlay = " + valueStr;
+        // 只匹配本行内的 "IsFreePlay = true/false"（可选行首 # 与空格），用 [ \t]* 避免 \s* 吃掉上一行末尾的换行
+        var pattern = @"#*[ \t]*IsFreePlay\b[ \t]*=[ \t]*(?:true|false)";
+        var result = Regex.Replace(tomlContent, pattern, newLine, RegexOptions.IgnoreCase);
+        if (result != tomlContent)
+            return result;
+        // 仅当文件中不存在任何 IsFreePlay = 行时才插入（避免已是 true 时替换无变化导致重复插入）
+        if (tomlContent.Contains("[GameSettings.CreditConfig]", StringComparison.OrdinalIgnoreCase)
+            && !Regex.IsMatch(tomlContent, @"IsFreePlay\b[ \t]*=", RegexOptions.IgnoreCase))
+        {
+            var sectionPattern = @"(\[GameSettings\.CreditConfig\]\r?\n)";
+            result = Regex.Replace(tomlContent, sectionPattern, "$1" + newLine + "\n", RegexOptions.IgnoreCase);
+        }
+        return result;
+    }
+
+    /// <summary>测试用：读取 TOML 文件、应用 IsFreePlay 并写回（便于命令行 --test-config 验证）</summary>
+    public static void TestApplyFreePlayToFile(string filePath, bool isFreePlay)
+    {
+        if (!File.Exists(filePath))
+        {
+            Console.WriteLine($"[测试] 文件不存在: {filePath}");
+            return;
+        }
+        var content = File.ReadAllText(filePath);
+        var before = content.Contains("IsFreePlay = true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+        var updated = ApplyFreePlayOverride(content, isFreePlay);
+        File.WriteAllText(filePath, updated);
+        Console.WriteLine($"[测试] 已修改 {filePath}: IsFreePlay {before} -> {isFreePlay}");
     }
 }
